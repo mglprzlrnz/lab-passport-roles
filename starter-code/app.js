@@ -6,10 +6,24 @@ const cookieParser = require('cookie-parser');
 const bodyParser   = require('body-parser');
 const mongoose     = require("mongoose");
 
+//adding passport, LocalStrategy and session
+const passport      = require("passport");
+const LocalStrategy = require("passport-local").Strategy;
+const session       = require("express-session");
+const bcrypt        = require("bcrypt");
+
 const app = express();
 
 // Controllers
 const siteController = require("./routes/siteController");
+
+// enable sessions
+app.use(session({
+  secret: "our-passport-local-strategy-app",
+  resave: true,
+  saveUninitialized: true
+}));
+
 
 // Mongoose configuration
 mongoose.connect("mongodb://localhost/ibi-ironhack");
@@ -25,6 +39,43 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
+
+
+
+
+//adding passport config
+passport.serializeUser((user, cb) => {
+  cb(null, user.id);
+});
+
+passport.deserializeUser((id, cb) => {
+  User.findOne({ "_id": id }, (err, user) => {
+    if (err) { return cb(err); }
+    cb(null, user);
+  });
+});
+
+passport.use(new LocalStrategy((username, password, next) => {
+  User.findOne({ username }, (err, user) => {
+    if (err) {
+      return next(err);
+    }
+    if (!user) {
+      return next(null, false, { message: "Incorrect username" });
+    }
+    if (!bcrypt.compareSync(password, user.password)) {
+      return next(null, false, { message: "Incorrect password" });
+    }
+
+    return next(null, user);
+  });
+}));
+
+
+
+// adding use passport
+app.use(passport.initialize());
+app.use(passport.session());
 
 // Routes
 app.use("/", siteController);
